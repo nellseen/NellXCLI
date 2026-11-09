@@ -9,7 +9,14 @@ import { createBuiltinToolRegistry } from "../../src/tools/builtins.js";
 const roots: string[] = [];
 afterEach(async () =>
   Promise.all(
-    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+    roots.splice(0).map((root) =>
+      rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      }),
+    ),
   ),
 );
 
