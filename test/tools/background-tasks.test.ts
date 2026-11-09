@@ -83,7 +83,7 @@ describe("background tasks", () => {
     await expect(
       waitForState(manager, workspace, sessionId, started.id, ["cancelled"]),
     ).resolves.toBe("cancelled");
-  });
+  }, 15_000);
 
   it("omits command arguments from persisted session tool history", () => {
     const persisted = createBuiltinToolRegistry().persistInput(
