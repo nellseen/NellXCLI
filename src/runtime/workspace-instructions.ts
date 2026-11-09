@@ -25,11 +25,16 @@ export async function loadWorkspaceInstructions(
     try {
       const file = join(directory, "AGENTS.md");
       const resolvedFile = await realpath(file);
-      const fileRel = relative(root, resolvedFile);
-      if (fileRel === ".." || fileRel.startsWith(`..${sep}`))
+      const absoluteFileRel = relative(root, resolvedFile);
+      if (
+        absoluteFileRel === ".." ||
+        absoluteFileRel.startsWith(`..${sep}`) ||
+        isAbsolute(absoluteFileRel)
+      )
         throw new Error(
           "Workspace instructions must stay inside the workspace.",
         );
+      const fileRel = absoluteFileRel.split(sep).join("/");
       const text = await readFile(resolvedFile, "utf8");
       totalBytes += Buffer.byteLength(text);
       if (totalBytes > MAX_INSTRUCTION_BYTES)
@@ -112,11 +117,16 @@ export async function loadWorkspaceInstructionTree(
     const file = join(directory, "AGENTS.md");
     try {
       const resolvedFile = await realpath(file);
-      const fileRel = relative(root, resolvedFile);
-      if (fileRel === ".." || fileRel.startsWith(`..${sep}`))
+      const absoluteFileRel = relative(root, resolvedFile);
+      if (
+        absoluteFileRel === ".." ||
+        absoluteFileRel.startsWith(`..${sep}`) ||
+        isAbsolute(absoluteFileRel)
+      )
         throw new Error(
           "Workspace instructions must stay inside the workspace.",
         );
+      const fileRel = absoluteFileRel.split(sep).join("/");
       if (existingPaths.has(fileRel)) continue;
       const text = await readFile(resolvedFile, "utf8");
       totalBytes += Buffer.byteLength(text);

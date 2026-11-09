@@ -43,7 +43,10 @@ export class WorkspaceSkillManager {
         continue;
       const parsed = parseSkillDocument(document);
       if (parsed)
-        skills.push({ ...parsed, directory: relative(root, directory) });
+        skills.push({
+          ...parsed,
+          directory: relative(root, directory).split(sep).join("/"),
+        });
     }
     return skills.sort((left, right) => left.name.localeCompare(right.name));
   }
