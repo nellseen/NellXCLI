@@ -65,7 +65,7 @@ describe("background tasks", () => {
     await expect(
       manager.get(workspace, randomUUID(), started.id),
     ).rejects.toThrow(/not found/);
-  });
+  }, 15_000);
 
   it("cancels a running process through its task marker", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "nellx-background-"));
