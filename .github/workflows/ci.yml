@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    name: Node.js 22 on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.16.1
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+      - name: Production dependency audit
+        run: pnpm audit --prod
+      - name: Package install and CLI smoke test
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/nellx-pack" "$RUNNER_TEMP/nellx-install"
+          pnpm pack --pack-destination "$RUNNER_TEMP/nellx-pack"
+          npm install --prefix "$RUNNER_TEMP/nellx-install" "$RUNNER_TEMP"/nellx-pack/*.tgz
+          node "$RUNNER_TEMP/nellx-install/node_modules/nellxcli/dist/index.js" --version
+          node "$RUNNER_TEMP/nellx-install/node_modules/nellxcli/dist/index.js" --help
+          npm uninstall --prefix "$RUNNER_TEMP/nellx-install" nellxcli

@@ -1,0 +1,9 @@
+# Background tasks
+
+Agent runs can launch an approved process with `background_start`, then inspect it with `background_get` or `background_list`, and request cancellation with `background_cancel`. Tasks run with argv arrays and `shell: false`, use the workspace as their working directory, and continue if the NellXCLI process exits. Each session may have at most three active tasks. Timeouts are bounded from 10 seconds to one hour (default 15 minutes).
+
+Task metadata is stored in `.nellx/tasks/` with restrictive file permissions where the OS supports them; `.gitignore` excludes this directory. It records the task/session ID, executable name, a redacted label, lifecycle state, timestamps, PID, and exit code. Raw command arguments are omitted from persisted session tool history and task metadata. Command output is discarded so secret-bearing output is not written to disk. The agent receives the exit status only. A heartbeat detects abandoned runners; after 30 seconds without one, a task is reported as `unknown` and does not block new work. Unknown means the state cannot be proven and must be checked by the user before repeating a non-idempotent task.
+
+## Security and limitations
+
+Starting a process and requesting cancellation require approval. Approval previews include redacted argv. Only `git`, `node`, `pnpm`, `npm`, `python`, and `python3` can be launched; no shell interpolation is used. A task inherits the user's process environment and runs with the user's OS privileges. There is no OS-level sandbox. Never include API keys, passwords, or other secrets as command arguments. Task metadata does not store the command or its output. Cancellation signals the direct child; descendants it spawned may outlive it. Process status files are workspace data and can be modified by workspace code, so status is not a security boundary.

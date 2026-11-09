@@ -27,26 +27,33 @@ Verify current SDK APIs and supported Node versions against official documentati
 ## 3. High-level layers
 
 ### CLI layer
+
 Argument parsing, commands, interactive mode, non-interactive mode, configuration, and exit codes.
 
 ### TUI layer
+
 Streaming messages, input, tool activity, approval prompts, diff display, session navigation, and status indicators.
 
 ### Agent runtime
+
 Provider-neutral agent loop, planning, tool orchestration, context selection, task completion, cancellation, and recovery.
 
 ### Provider adapters
+
 A normalized interface for model discovery, streaming, function calling, token usage, cancellation, and provider error classification. Initial adapter: Google AI Studio / Gemini.
 
 ### Tool runtime
+
 Validated tools for reading/writing files, patching, searching, listing, shell execution, and Git inspection.
 
 ### Storage
+
 Transactional persistence for settings, account metadata, sessions, event history, plans, tool operations, checkpoints, and usage metadata.
 
 ## 4. Agent loop
 
 The agent loop must:
+
 1. Receive the user's task and current session state.
 2. Build a bounded context from instructions, relevant files, history, and plan.
 3. Request a model response.
@@ -60,9 +67,12 @@ The agent loop must:
 
 Do not assume one model response completes a task. Include iteration limits, cancellation, and loop detection.
 
+Workspace `AGENTS.md` files apply from the workspace root through a target directory. Before a file tool runs, NellXCLI loads the applicable instructions; recursive listing and search also preload descendant instructions to the tool's depth. When new instructions are found, the tool call is deferred so the model can review them first. Discovery is bounded to 100 KB and 1,000 directories, skips protected internal trees and symlinked directories, and verifies real paths remain inside the workspace.
+
 ## 5. Provider interface
 
 Define a provider-neutral interface for:
+
 - listModels
 - generate/stream response
 - tool/function calling
@@ -85,6 +95,7 @@ An account profile can contain multiple API keys. Multiple profiles can point to
 Suggested entities:
 
 ### AccountProfile
+
 - id
 - displayName
 - optional userLabel
@@ -95,6 +106,7 @@ Suggested entities:
 - updatedAt
 
 ### ApiCredential
+
 - id
 - accountProfileId
 - projectId
@@ -105,6 +117,7 @@ Suggested entities:
 - lastUsedAt
 
 ### ProjectHealth
+
 - projectId
 - model
 - status
@@ -129,6 +142,7 @@ Never persist raw API keys in SQLite or ordinary JSON settings. Store a credenti
 10. Resume the same logical agent session.
 
 Error categories:
+
 - authentication
 - permission
 - rate_limit
@@ -144,6 +158,7 @@ Do not treat every 429 as proof that switching keys helps. Distinguish project/m
 ## 8. Context and session persistence
 
 Use an event-based session model. Persist:
+
 - user and assistant messages
 - tool call requests
 - tool execution start/result/failure
@@ -162,6 +177,7 @@ On restart, restore the latest consistent checkpoint, inspect unfinished operati
 ## 9. Tools
 
 Initial tool set:
+
 - read_file
 - write_file
 - apply_patch
@@ -177,6 +193,7 @@ Every tool needs a schema, permission classification, structured result, timeout
 ## 10. Permissions and sandboxing
 
 Modes:
+
 - Normal: approval for sensitive operations; workspace-scoped file access.
 - Auto: more autonomous execution within explicitly authorized workspace boundaries.
 - Plan: read/plan only; no file modifications or shell side effects.

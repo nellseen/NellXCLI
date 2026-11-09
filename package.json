@@ -1,0 +1,63 @@
+{
+  "name": "nellxcli",
+  "version": "0.1.0",
+  "description": "An independent Gemini-powered terminal coding agent",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "nellx": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@12.16.1",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node22 --clean --sourcemap",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.tsx\" \"test/**/*.ts\" \"*.json\" \"*.js\" \".github/**/*.yml\" \"*.yaml\" README.md",
+    "format:check": "prettier --check \"src/**/*.ts\" \"src/**/*.tsx\" \"test/**/*.ts\" \"*.json\" \"*.js\" \".github/**/*.yml\" \"*.yaml\" README.md"
+  },
+  "dependencies": {
+    "@google/genai": "3.0.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@napi-rs/keyring": "2.1.2",
+    "commander": "15.1.0",
+    "ignore": "7.0.14",
+    "ink": "8.0.0",
+    "pino": "10.4.0",
+    "react": "19.3.1",
+    "sql.js": "1.15.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.6.6",
+    "@types/react": "19.2.14",
+    "@types/sql.js": "1.4.11",
+    "eslint": "10.14.0",
+    "globals": "17.14.0",
+    "prettier": "3.9.10",
+    "tsup": "9.0.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2",
+    "vitest": "5.1.0"
+  },
+  "files": [
+    "dist/**",
+    "README.md",
+    "docs/ARCHITECTURE.md",
+    "docs/FEATURE-MATRIX.md",
+    "docs/SECURITY.md",
+    "docs/SKILLS.md",
+    "docs/WORKTREES.md",
+    "docs/MCP.md",
+    "docs/IMAGE-INPUT.md",
+    "docs/BACKGROUND-TASKS.md",
+    "docs/SUBAGENTS.md",
+    "docs/RELEASE-CHECKLIST.md"
+  ]
+}
