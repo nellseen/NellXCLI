@@ -46,6 +46,7 @@ export interface SessionInfo {
   state: "active" | "completed" | "cancelled";
   createdAt: string;
   updatedAt: string;
+  model?: string;
 }
 export interface SessionEvent {
   id: string;
@@ -70,7 +71,11 @@ export interface ToolOperation {
 export class SessionStore {
   constructor(private readonly database: LocalDatabase) {}
 
-  async create(workspace: string, title = "New session"): Promise<SessionInfo> {
+  async create(
+    workspace: string,
+    title = "New session",
+    model?: string,
+  ): Promise<SessionInfo> {
     const id = randomUUID();
     const now = new Date().toISOString();
     await this.database.execute(
@@ -78,6 +83,7 @@ export class SessionStore {
        VALUES (?, ?, ?, 'active', ?, ?)`,
       [id, title, workspace, now, now],
     );
+    if (model) await this.setModel(id, model);
     return {
       id,
       title,
@@ -85,6 +91,7 @@ export class SessionStore {
       state: "active",
       createdAt: now,
       updatedAt: now,
+      ...(model ? { model } : {}),
     };
   }
 
@@ -96,7 +103,10 @@ export class SessionStore {
       state: SessionInfo["state"];
       created_at: string;
       updated_at: string;
-    }>("SELECT * FROM sessions ORDER BY updated_at DESC");
+      model_id?: string | null;
+    }>(`SELECT s.*, m.model_id FROM sessions s
+       LEFT JOIN session_metadata m ON m.session_id = s.id
+       ORDER BY s.updated_at DESC`);
     return rows.map(toSessionInfo);
   }
 
@@ -108,9 +118,38 @@ export class SessionStore {
       state: SessionInfo["state"];
       created_at: string;
       updated_at: string;
-    }>("SELECT * FROM sessions WHERE id = ?", [sessionId]);
+      model_id?: string | null;
+    }>(
+      `SELECT s.*, m.model_id FROM sessions s
+       LEFT JOIN session_metadata m ON m.session_id = s.id WHERE s.id = ?`,
+      [sessionId],
+    );
     if (!row) throw new Error("Session was not found.");
     return toSessionInfo(row);
+  }
+
+  async setModel(sessionId: string, model: string): Promise<void> {
+    this.get(sessionId);
+    const normalized = z.string().trim().min(1).max(200).parse(model);
+    await this.database.execute(
+      `INSERT INTO session_metadata (session_id, model_id, updated_at)
+       VALUES (?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET
+       model_id = excluded.model_id, updated_at = excluded.updated_at`,
+      [sessionId, normalized, new Date().toISOString()],
+    );
+    await this.database.execute(
+      "UPDATE sessions SET updated_at = ? WHERE id = ?",
+      [new Date().toISOString(), sessionId],
+    );
+  }
+
+  async setWorkspace(sessionId: string, workspace: string): Promise<void> {
+    this.get(sessionId);
+    const normalized = z.string().trim().min(1).max(4_096).parse(workspace);
+    await this.database.execute(
+      "UPDATE sessions SET workspace = ?, updated_at = ? WHERE id = ?",
+      [normalized, new Date().toISOString(), sessionId],
+    );
   }
 
   async appendEvent(
@@ -449,6 +488,7 @@ function toSessionInfo(row: {
   state: SessionInfo["state"];
   created_at: string;
   updated_at: string;
+  model_id?: string | null;
 }): SessionInfo {
   return {
     id: row.id,
@@ -457,5 +497,6 @@ function toSessionInfo(row: {
     state: row.state,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...(row.model_id ? { model: row.model_id } : {}),
   };
 }

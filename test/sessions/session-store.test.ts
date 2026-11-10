@@ -28,6 +28,27 @@ async function openStore(): Promise<{
 }
 
 describe("SessionStore", () => {
+  it("persists a session model and workspace updates", async () => {
+    const { database, store } = await openStore();
+    const session = await store.create(
+      "/workspace/old",
+      "New Chat",
+      "gemini-2.5-flash",
+    );
+    await store.setModel(session.id, "gemini-3.5-flash");
+    await store.setWorkspace(session.id, "/workspace/new");
+
+    expect(store.get(session.id)).toMatchObject({
+      workspace: "/workspace/new",
+      model: "gemini-3.5-flash",
+    });
+    expect(store.list()[0]).toMatchObject({
+      id: session.id,
+      model: "gemini-3.5-flash",
+    });
+    database.close();
+  });
+
   it("persists event history and checkpoints across database reopen", async () => {
     const first = await openStore();
     const session = await first.store.create("/workspace", "fix issue");

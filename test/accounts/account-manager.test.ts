@@ -114,6 +114,24 @@ describe("AccountManager", () => {
     database.close();
   });
 
+  it("applies discovery-wide project cooldown to every model", async () => {
+    const { manager, database } = await createManager();
+    const profile = await manager.addProfile({
+      displayName: "One",
+      projectId: "project-a",
+    });
+    await manager.addApiKey(profile.id, "key-one");
+    await manager.recordProjectFailure(
+      "project-a",
+      "*",
+      "quota_exhausted",
+      new Date(Date.now() + 60_000).toISOString(),
+    );
+
+    expect(await manager.getEligibleProjectIds("gemini-flash")).toEqual([]);
+    database.close();
+  });
+
   it("quarantines invalid credentials and removes profile secrets safely", async () => {
     const { manager, secrets, database } = await createManager();
     const profile = await manager.addProfile({

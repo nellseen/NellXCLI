@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ProviderConfigurationError,
   ProviderRequestError,
+  canonicalModelId,
   type ModelInfo,
   type TextGenerationRequest,
   type TextProvider,
@@ -57,7 +58,7 @@ export class GeminiProvider implements TextProvider {
         if (!model.name || !model.supportedActions?.includes("generateContent"))
           continue;
         models.push({
-          id: model.name,
+          id: canonicalModelId(model.name),
           displayName: model.displayName || model.name,
           ...(model.description ? { description: model.description } : {}),
           ...(model.inputTokenLimit !== undefined
@@ -117,7 +118,7 @@ export class GeminiProvider implements TextProvider {
       : request.prompt;
     try {
       const stream = await this.client.models.generateContentStream({
-        model: request.model,
+        model: canonicalModelId(request.model),
         contents,
         ...(request.signal ? { config: { abortSignal: request.signal } } : {}),
       });

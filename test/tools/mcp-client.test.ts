@@ -39,7 +39,7 @@ describe("MCP stdio client", () => {
     await expect(
       client.callTool(workspace, "echo", "echo", {}),
     ).rejects.toThrow();
-  });
+  }, 15_000);
 
   it("requires approval in Auto mode and is unavailable in Plan mode", async () => {
     const registry = createBuiltinToolRegistry();

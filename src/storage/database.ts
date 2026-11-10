@@ -6,6 +6,7 @@ import initSqlJs, { type Database as SqlDatabase, type SqlValue } from "sql.js";
 const require = createRequire(import.meta.url);
 
 export class LocalDatabase {
+  private transactionActive = false;
   private constructor(
     private readonly database: SqlDatabase,
     private readonly filePath: string,
@@ -70,6 +71,11 @@ export class LocalDatabase {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS session_metadata (
+        session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+        model_id TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS session_events (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -123,20 +129,27 @@ export class LocalDatabase {
 
   async execute(sql: string, params: SqlValue[] = []): Promise<void> {
     this.database.run(sql, params);
-    await this.persist();
+    if (!this.transactionActive) await this.persist();
   }
 
-  async transaction<T>(operation: (database: LocalDatabase) => T): Promise<T> {
+  async transaction<T>(
+    operation: (database: LocalDatabase) => T | Promise<T>,
+  ): Promise<T> {
     this.database.run("BEGIN IMMEDIATE");
+    this.transactionActive = true;
     let committed = false;
     try {
-      const result = operation(this);
+      const result = await operation(this);
       this.database.run("COMMIT");
       committed = true;
+      this.transactionActive = false;
       await this.persist();
       return result;
     } catch (error) {
-      if (!committed) this.database.run("ROLLBACK");
+      if (!committed) {
+        this.database.run("ROLLBACK");
+        this.transactionActive = false;
+      }
       throw error;
     }
   }

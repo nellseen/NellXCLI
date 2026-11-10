@@ -2,6 +2,7 @@ import { AccountManager } from "../accounts/account-manager.js";
 import {
   ProviderConfigurationError,
   ProviderRequestError,
+  canonicalModelId,
   type ModelInfo,
   type ProviderErrorCategory,
   type TextGenerationRequest,
@@ -35,6 +36,7 @@ interface Candidate {
   projectId: string;
   credentialId: string;
   priority: number;
+  isDefault: boolean;
 }
 
 const cooldownMs: Partial<Record<ProviderErrorCategory, number>> = {
@@ -71,43 +73,47 @@ export class ProviderRouter {
   async listModels(): Promise<readonly ModelInfo[]> {
     const candidates = await this.collectCandidates("");
     const models = new Map<string, ModelInfo>();
-    for (const candidate of candidates) {
-      try {
-        const key = await this.accounts.getApiKey(candidate.credentialId);
-        const available = await this.createProvider(key).listModels();
-        for (const model of available) models.set(model.id, model);
-      } catch (error) {
-        const normalized = this.normalize(
-          error,
-          "Unable to list models for the configured accounts.",
-        );
-        if (normalized.category === "authentication") {
-          await this.accounts.quarantineCredential(candidate.credentialId);
-          continue;
-        }
-        if (normalized.category === "permission") {
-          await this.accounts.recordProjectFailure(
-            candidate.projectId,
-            "*",
-            "permission",
+    for (const [projectId, projectCandidates] of groupByProject(candidates)) {
+      for (const candidate of projectCandidates) {
+        try {
+          const key = await this.accounts.getApiKey(candidate.credentialId);
+          const available = await this.createProvider(key).listModels();
+          for (const model of available) models.set(model.id, model);
+          break;
+        } catch (error) {
+          const normalized = this.normalize(
+            error,
+            "Unable to list models for the configured accounts.",
           );
-          continue;
+          if (normalized.category === "authentication") {
+            await this.accounts.quarantineCredential(candidate.credentialId);
+            continue;
+          }
+          if (normalized.category === "permission") {
+            await this.accounts.recordProjectFailure(
+              projectId,
+              "*",
+              "permission",
+            );
+            throw normalized;
+          }
+          if (
+            normalized.category === "rate_limit" ||
+            normalized.category === "quota_exhausted"
+          ) {
+            await this.cooldownProject(candidate, "*", normalized.category, 1);
+            break;
+          }
+          throw normalized;
         }
-        if (
-          normalized.category === "rate_limit" ||
-          normalized.category === "quota_exhausted"
-        ) {
-          await this.cooldownProject(candidate, "*", normalized.category, 1);
-          continue;
-        }
-        throw normalized;
       }
     }
     return [...models.values()];
   }
 
   async *streamText(request: TextGenerationRequest): AsyncIterable<string> {
-    const candidates = await this.collectCandidates(request.model);
+    const model = canonicalModelId(request.model);
+    const candidates = await this.collectCandidates(model);
     const groups = groupByProject(candidates);
     let lastError: Error | undefined;
     let attempts = 0;
@@ -125,7 +131,7 @@ export class ProviderRouter {
           type: "provider_failover",
           projectId,
           credentialId: firstCandidate.credentialId,
-          model: request.model,
+          model,
           category: lastError.category,
           attempt: attempts,
           at: this.now().toISOString(),
@@ -140,7 +146,7 @@ export class ProviderRouter {
             type: "provider_attempt",
             projectId,
             credentialId: candidate.credentialId,
-            model: request.model,
+            model,
             attempt: attempts,
             at: this.now().toISOString(),
           });
@@ -153,22 +159,25 @@ export class ProviderRouter {
             const models = await provider.listModels();
             if (
               !models.some(
-                (model) =>
-                  model.id === request.model &&
-                  model.capabilities.includes("textGeneration"),
+                (modelInfo) =>
+                  modelInfo.id === model &&
+                  modelInfo.capabilities.includes("textGeneration"),
               )
             ) {
               lastError = new ProviderConfigurationError(
-                `Model "${request.model}" is unavailable for project ${projectId}.`,
+                `Model "${model}" is unavailable for project ${projectId}.`,
               );
               projectUnavailable = true;
               break;
             }
-            for await (const chunk of provider.streamText(request)) {
+            for await (const chunk of provider.streamText({
+              ...request,
+              model,
+            })) {
               emittedText = true;
               yield chunk;
             }
-            await this.accounts.recordProjectSuccess(projectId, request.model);
+            await this.accounts.recordProjectSuccess(projectId, model);
             return;
           } catch (error) {
             const normalized = this.normalize(error, "Gemini request failed.");
@@ -181,7 +190,7 @@ export class ProviderRouter {
                 type: "provider_quarantined",
                 projectId,
                 credentialId: candidate.credentialId,
-                model: request.model,
+                model,
                 category: normalized.category,
                 attempt: attempts,
                 at: this.now().toISOString(),
@@ -192,7 +201,7 @@ export class ProviderRouter {
             if (normalized.category === "permission") {
               await this.accounts.recordProjectFailure(
                 projectId,
-                request.model,
+                model,
                 "permission",
               );
               throw normalized;
@@ -204,7 +213,7 @@ export class ProviderRouter {
             ) {
               await this.cooldownProject(
                 candidate,
-                request.model,
+                model,
                 normalized.category,
                 attempts,
               );
@@ -228,7 +237,7 @@ export class ProviderRouter {
               }
               await this.cooldownProject(
                 candidate,
-                request.model,
+                model,
                 normalized.category,
                 attempts,
               );
@@ -256,6 +265,7 @@ export class ProviderRouter {
       await this.accounts.getEligibleProjectIds(model),
     );
     const profiles = await this.accounts.listProfiles();
+    const defaultProfileId = this.accounts.getDefaultProfileId();
     const credentials = await this.accounts.listCredentials();
     return credentials
       .filter(
@@ -274,8 +284,13 @@ export class ProviderRouter {
         priority:
           profiles.find((profile) => profile.id === credential.accountProfileId)
             ?.priority ?? 0,
+        isDefault: credential.accountProfileId === defaultProfileId,
       }))
-      .sort((left, right) => right.priority - left.priority);
+      .sort(
+        (left, right) =>
+          Number(right.isDefault) - Number(left.isDefault) ||
+          right.priority - left.priority,
+      );
   }
 
   private normalize(error: unknown, fallback: string): ProviderRequestError {

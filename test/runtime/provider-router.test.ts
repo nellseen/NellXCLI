@@ -102,6 +102,80 @@ async function collect(router: ProviderRouter): Promise<string[]> {
 }
 
 describe("ProviderRouter", () => {
+  it("does not try another key in a quota-exhausted project during model discovery", async () => {
+    const { database, accounts } = await setup();
+    await addAccount(accounts, "Project A", "project-a", "key-a1", 20);
+    await addAccount(
+      accounts,
+      "Project A second key",
+      "project-a",
+      "key-a2",
+      19,
+    );
+    await addAccount(accounts, "Project B", "project-b", "key-b", 10);
+    const listCalls: string[] = [];
+    const router = new ProviderRouter(accounts, (apiKey) => ({
+      listModels: async () => {
+        listCalls.push(apiKey);
+        if (apiKey === "key-a1")
+          throw new ProviderRequestError("quota_exhausted", "quota");
+        if (apiKey === "key-a2")
+          throw new Error("same-project alternate key must not run");
+        return [
+          {
+            id: "gemini-flash",
+            displayName: "Flash",
+            capabilities: ["textGeneration"],
+          },
+        ];
+      },
+      async *streamText() {
+        yield "unused";
+      },
+    }));
+
+    await expect(router.listModels()).resolves.toMatchObject([
+      { id: "gemini-flash" },
+    ]);
+    expect(listCalls).toEqual(["key-a1", "key-b"]);
+    expect(await accounts.listProjectHealth()).toContainEqual(
+      expect.objectContaining({
+        projectId: "project-a",
+        status: "cooldown",
+        lastErrorCategory: "quota_exhausted",
+      }),
+    );
+    database.close();
+  });
+
+  it("tries the selected default profile before priority-sorted fallbacks", async () => {
+    const { database, accounts } = await setup();
+    await addAccount(accounts, "Higher priority", "project-a", "key-a", 50);
+    const selected = await accounts.addProfile({
+      displayName: "Selected default",
+      projectId: "project-b",
+      priority: 0,
+    });
+    await accounts.addApiKey(selected.id, "key-b");
+    await accounts.setDefaultProfile(selected.id);
+    const scripts = new Map<string, Array<Array<string | Error>>>([
+      ["key-a", [["wrong account was selected"]]],
+      ["key-b", [["selected account response"]]],
+    ]);
+    const calls: string[] = [];
+    const router = new ProviderRouter(
+      accounts,
+      makeProviderFactory(scripts, calls),
+      { maxTransientRetries: 0 },
+    );
+
+    await expect(collect(router)).resolves.toEqual([
+      "selected account response",
+    ]);
+    expect(calls).toEqual(["key-b"]);
+    database.close();
+  });
+
   it("fails over project-wide quota without trying another key in the same project", async () => {
     const { database, accounts } = await setup();
     await addAccount(accounts, "Project A", "project-a", "key-a1", 20);

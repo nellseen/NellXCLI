@@ -37,6 +37,7 @@ export function createSubagentTool(
       const child = await sessions.create(
         context.workspace,
         "Read-only subagent",
+        context.model ?? "gemini-2.5-flash",
       );
       try {
         const worker = new AgentRuntime(

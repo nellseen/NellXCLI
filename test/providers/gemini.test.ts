@@ -39,7 +39,7 @@ describe("GeminiProvider", () => {
 
     await expect(provider.listModels()).resolves.toEqual([
       {
-        id: "models/gemini-flash",
+        id: "gemini-flash",
         displayName: "Gemini Flash",
         inputTokenLimit: 1000,
         capabilities: ["textGeneration"],
@@ -70,7 +70,7 @@ describe("GeminiProvider", () => {
 
     expect(chunks).toEqual(["hello ", "world"]);
     expect(generateContentStream).toHaveBeenCalledWith({
-      model: "models/gemini-flash",
+      model: "gemini-flash",
       contents: "hi",
     });
   });
@@ -99,7 +99,7 @@ describe("GeminiProvider", () => {
       expect(chunk).toBe("image answer");
     }
     expect(generateContentStream).toHaveBeenCalledWith({
-      model: "models/gemini-flash",
+      model: "gemini-flash",
       contents: [
         { role: "user", parts: [{ text: "describe" }, { inlineData: image }] },
       ],
@@ -275,6 +275,9 @@ describe("provider configuration and model selection", () => {
     ];
 
     expect(selectModel(models, { model: "gemini-flash" }).id).toBe(
+      "gemini-flash",
+    );
+    expect(selectModel(models, { model: "models/gemini-flash" }).id).toBe(
       "gemini-flash",
     );
     expect(() => selectModel(models, { model: "image-model" })).toThrow(

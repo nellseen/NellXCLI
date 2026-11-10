@@ -21,6 +21,13 @@ export interface ModelInfo {
   capabilities: readonly ModelCapability[];
 }
 
+export function canonicalModelId(modelId: string): string {
+  const trimmed = modelId.trim();
+  return trimmed.startsWith("models/")
+    ? trimmed.slice("models/".length)
+    : trimmed;
+}
+
 export interface ImageAttachment {
   mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
   data: string;
@@ -76,7 +83,8 @@ export function selectModel(
   );
 
   if (requirements.model) {
-    const match = usableModels.find((model) => model.id === requirements.model);
+    const requestedModel = canonicalModelId(requirements.model);
+    const match = usableModels.find((model) => model.id === requestedModel);
     if (match) return match;
     throw new ProviderConfigurationError(
       `Model "${requirements.model}" is unavailable or does not support ${capability}. Run "nellx models list" to see usable models.`,

@@ -394,7 +394,7 @@ export class AccountManager {
       status: ProjectHealthInfo["status"];
       cooldown_until: string | null;
     }>(
-      "SELECT project_id, status, cooldown_until FROM project_health WHERE model = ?",
+      "SELECT project_id, status, cooldown_until FROM project_health WHERE model = ? OR model = '*'",
       [model],
     );
     const excluded = new Set(
